@@ -24,6 +24,9 @@ importers:
         specifier: ^4.7.0
         version: 4.12.11
     devDependencies:
+      '@pdslite/plugin-allow-all':
+        specifier: workspace:*
+        version: link:../plugin-allow-all
       '@pdslite/plugin-auth-password':
         specifier: workspace:*
         version: link:../plugin-auth-password
@@ -36,6 +39,18 @@ importers:
       vitest:
         specifier: ^3.1.0
         version: 3.2.4(jiti@2.6.1)
+
+  packages/plugin-allow-all:
+    devDependencies:
+      '@pdslite/pds':
+        specifier: workspace:*
+        version: link:../pds
+      tsdown:
+        specifier: ^0.12.0
+        version: 0.12.9(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
 
   packages/plugin-auth-password:
     dependencies:

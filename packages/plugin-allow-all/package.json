@@ -1,0 +1,15 @@
+{
+  "name": "@pdslite/plugin-allow-all",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts"
+  },
+  "devDependencies": {
+    "@pdslite/pds": "workspace:*",
+    "tsdown": "^0.12.0",
+    "typescript": "^5.8.0"
+  }
+}

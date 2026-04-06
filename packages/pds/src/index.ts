@@ -5,8 +5,12 @@ import type { AppContext } from "./context.js";
 import { createServer } from "./server.js";
 import { loadPlugins } from "./plugin/loader.js";
 import { InMemoryAccountManager } from "./account/manager.js";
+import { InMemoryRecordStore } from "./record-store/memory.js";
+import { InMemoryBlobStore } from "./blob-store/memory.js";
 import type { Plugin, AccountFilter } from "./plugin/types.js";
 import type { AccountManager } from "./account/types.js";
+import type { RecordStore } from "./record-store/types.js";
+import type { BlobStore } from "./blob-store/types.js";
 
 export { createServer } from "./server.js";
 export type { AppContext } from "./context.js";
@@ -27,6 +31,15 @@ export type {
   CreateAccountOpts,
 } from "./plugin/types.js";
 export type { Account, AccountManager } from "./account/types.js";
+export type {
+  RecordStore,
+  StoredRecord,
+  ListRecordsOpts,
+  ListRecordsResult,
+} from "./record-store/types.js";
+export type { BlobStore, BlobRef } from "./blob-store/types.js";
+export { InMemoryRecordStore } from "./record-store/memory.js";
+export { InMemoryBlobStore } from "./blob-store/memory.js";
 export { XRPCError } from "./xrpc/types.js";
 
 export interface ServerOpts {
@@ -34,6 +47,8 @@ export interface ServerOpts {
   plugins?: Plugin[];
   accountFilters?: AccountFilter[];
   accountManager?: AccountManager;
+  recordStore?: RecordStore;
+  blobStore?: BlobStore;
 }
 
 export interface ServerHandle {
@@ -44,6 +59,8 @@ export interface ServerHandle {
 export async function startServer(opts?: ServerOpts): Promise<ServerHandle> {
   const port = opts?.port ?? 13583;
   const accountManager = opts?.accountManager ?? new InMemoryAccountManager();
+  const recordStore = opts?.recordStore ?? new InMemoryRecordStore();
+  const blobStore = opts?.blobStore ?? new InMemoryBlobStore();
 
   // Load plugins first so we have filters and auth before building the app
   const pluginRouter = new Hono();
@@ -60,6 +77,8 @@ export async function startServer(opts?: ServerOpts): Promise<ServerHandle> {
     accountFilters: [...(opts?.accountFilters ?? []), ...loaded.accountFilters],
     authProvider: loaded.authProvider,
     accountManager,
+    recordStore,
+    blobStore,
   };
 
   const app = createServer(ctx);

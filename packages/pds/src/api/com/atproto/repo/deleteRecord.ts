@@ -6,14 +6,22 @@ import { runWriteFilters } from "../../../../write-filter/index.js";
 export function deleteRecord(ctx: AppContext): XRPCHandler {
   return async (c) => {
     const body = await c.req.json();
+    const did = body.repo;
+    const collection = body.collection;
+    const rkey = body.rkey;
+
     const result = await runWriteFilters(ctx.writeFilters, {
       action: "delete",
-      collection: body.collection,
-      rkey: body.rkey,
+      collection,
+      rkey,
     });
     if (result.decision === "reject") {
       throw new XRPCError(400, "InvalidRequest", result.reason);
     }
+
+    const uri = `at://${did}/${collection}/${rkey}`;
+    await ctx.blobStore.removeReferences(uri);
+    await ctx.recordStore.deleteRecord(did, collection, rkey);
     return c.json({});
   };
 }

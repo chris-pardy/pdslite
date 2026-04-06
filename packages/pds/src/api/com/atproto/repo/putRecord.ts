@@ -6,15 +6,34 @@ import { runWriteFilters } from "../../../../write-filter/index.js";
 export function putRecord(ctx: AppContext): XRPCHandler {
   return async (c) => {
     const body = await c.req.json();
+    const did = body.repo;
+    const collection = body.collection;
+    const rkey = body.rkey;
+
     const result = await runWriteFilters(ctx.writeFilters, {
       action: "update",
-      collection: body.collection,
-      rkey: body.rkey,
+      collection,
+      rkey,
       record: body.record,
     });
     if (result.decision === "reject") {
       throw new XRPCError(400, "InvalidRequest", result.reason);
     }
-    return c.json({ uri: "", cid: "" });
+
+    const finalRecord =
+      "record" in result && result.record !== undefined
+        ? result.record
+        : body.record;
+
+    const uri = `at://${did}/${collection}/${rkey}`;
+    await ctx.blobStore.removeReferences(uri);
+
+    const stored = await ctx.recordStore.putRecord(
+      did,
+      collection,
+      rkey,
+      finalRecord,
+    );
+    return c.json({ uri: stored.uri, cid: stored.cid });
   };
 }
