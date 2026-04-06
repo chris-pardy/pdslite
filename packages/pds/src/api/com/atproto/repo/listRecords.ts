@@ -15,12 +15,25 @@ export function listRecords(ctx: AppContext): XRPCHandler {
       );
     }
 
-    const limit = c.req.query("limit");
+    const limitParam = c.req.query("limit");
     const cursor = c.req.query("cursor");
     const reverse = c.req.query("reverse");
 
+    let limit: number | undefined;
+    if (limitParam) {
+      limit = Number(limitParam);
+      if (!Number.isFinite(limit) || limit < 1) {
+        throw new XRPCError(
+          400,
+          "InvalidRequest",
+          "limit must be a positive integer",
+        );
+      }
+      limit = Math.min(limit, 100);
+    }
+
     const result = await ctx.recordStore.listRecords(repo, collection, {
-      limit: limit ? Math.min(Number(limit), 100) : undefined,
+      limit,
       cursor: cursor ?? undefined,
       reverse: reverse === "true",
     });

@@ -17,14 +17,11 @@ export function getBlob(ctx: AppContext): XRPCHandler {
 
     const blob = await ctx.blobStore.getBlob(cid);
     if (!blob) {
-      throw new XRPCError(400, "BlobNotFound", `Blob not found: ${cid}`);
+      throw new XRPCError(404, "BlobNotFound", `Blob not found: ${cid}`);
     }
 
-    return new Response(blob.bytes, {
-      headers: {
-        "Content-Type": blob.mimeType,
-        "Content-Length": String(blob.bytes.byteLength),
-      },
-    });
+    c.header("Content-Type", blob.mimeType);
+    c.header("Content-Length", String(blob.bytes.byteLength));
+    return c.body(blob.bytes);
   };
 }

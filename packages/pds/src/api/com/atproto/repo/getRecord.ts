@@ -19,7 +19,7 @@ export function getRecord(ctx: AppContext): XRPCHandler {
     const record = await ctx.recordStore.getRecord(repo, collection, rkey);
     if (!record) {
       throw new XRPCError(
-        400,
+        404,
         "RecordNotFound",
         `Record not found: ${collection}/${rkey}`,
       );
