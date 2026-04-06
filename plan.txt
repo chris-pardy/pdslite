@@ -338,7 +338,19 @@ STEP 5: Default plugins
 
   Milestone: All plugins unit-tested. Can compose any combination.
 
-STEP 6: Storage backends + production hardening
+STEP 6: Input validation + hardening
+
+  Build:
+  - Validate rkey format (max length, allowed characters) before filters
+  - Validate collection names are valid NSIDs (use @atproto/syntax)
+  - Record size limits (reject oversized payloads before filter pipeline)
+  - Atomic blob reference cleanup in putRecord (restore refs on failure)
+  - Configurable describeServer (derive inviteCodeRequired from filters)
+  - Request size limits via Hono bodyLimit middleware
+
+  Milestone: All inputs validated at system boundary.
+
+STEP 7: Storage backends + production hardening
 
   Build:
   - storage-sqlite package
