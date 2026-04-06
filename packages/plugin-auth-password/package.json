@@ -1,18 +1,18 @@
 {
-  "name": "@pdslite/pds",
+  "name": "@pdslite/plugin-auth-password",
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
     "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.7.0",
-    "@hono/node-server": "^1.14.0"
+    "jose": "^6.0.0"
   },
   "devDependencies": {
-    "@pdslite/plugin-auth-password": "workspace:*",
+    "@pdslite/pds": "workspace:*",
     "tsdown": "^0.12.0",
     "vitest": "^3.1.0",
     "typescript": "^5.8.0"

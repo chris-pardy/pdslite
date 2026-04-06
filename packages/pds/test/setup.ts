@@ -74,3 +74,50 @@ export async function xrpcGet(
   }
   return fetch(xrpcUrl(nsid, params), { headers });
 }
+
+/** Create helpers bound to a specific port (for tests with custom servers). */
+export function createTestHelpers(port: number) {
+  const baseUrl = `http://localhost:${port}`;
+
+  function url(nsid: string, params?: Record<string, string>): string {
+    const u = new URL(`/xrpc/${nsid}`, baseUrl);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        u.searchParams.set(k, v);
+      }
+    }
+    return u.toString();
+  }
+
+  return {
+    baseUrl,
+    async post(
+      nsid: string,
+      body: unknown,
+      opts?: { auth?: string },
+    ): Promise<Response> {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (opts?.auth) {
+        headers["Authorization"] = `Bearer ${opts.auth}`;
+      }
+      return fetch(url(nsid), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+    },
+    async get(
+      nsid: string,
+      params?: Record<string, string>,
+      opts?: { auth?: string },
+    ): Promise<Response> {
+      const headers: Record<string, string> = {};
+      if (opts?.auth) {
+        headers["Authorization"] = `Bearer ${opts.auth}`;
+      }
+      return fetch(url(nsid, params), { headers });
+    },
+  };
+}
