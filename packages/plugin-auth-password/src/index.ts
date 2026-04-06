@@ -1,5 +1,8 @@
 import * as crypto from "node:crypto";
+import { promisify } from "node:util";
 import { SignJWT, jwtVerify } from "jose";
+
+const scryptAsync = promisify(crypto.scrypt);
 import type {
   Plugin,
   PluginContext,
@@ -29,18 +32,12 @@ export function pluginAuthPassword(config?: PasswordAuthConfig): Plugin {
     password: string,
     salt: string,
   ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      crypto.scrypt(
-        password,
-        salt,
-        64,
-        { N: scryptCost, r: 8, p: 1 },
-        (err, key) => {
-          if (err) reject(err);
-          else resolve(key.toString("hex"));
-        },
-      );
-    });
+    const key = (await scryptAsync(password, salt, 64, {
+      N: scryptCost,
+      r: 8,
+      p: 1,
+    })) as Buffer;
+    return key.toString("hex");
   }
 
   async function verifyPassword(
