@@ -70,7 +70,8 @@ export class InMemoryRecordStore implements RecordStore {
 
     const sliced = keys.slice(0, limit);
     const records = sliced.map((k) => collMap.get(k)!);
-    const cursor = sliced.length === limit ? sliced[sliced.length - 1] : undefined;
+    const cursor =
+      sliced.length === limit ? sliced[sliced.length - 1] : undefined;
 
     return { records, cursor };
   }

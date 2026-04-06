@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts"
+    "build": "tsdown src/index.ts --format esm --dts",
+    "lint": "oxlint src/"
   },
   "devDependencies": {
     "@pdslite/pds": "workspace:*",

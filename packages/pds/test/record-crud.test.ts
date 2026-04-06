@@ -12,9 +12,7 @@ let testDid: string;
 beforeAll(async () => {
   const { startServer } = await import("../src/index.js");
   const { pluginAllowAll } = await import("@pdslite/plugin-allow-all");
-  const { pluginAuthPassword } = await import(
-    "@pdslite/plugin-auth-password"
-  );
+  const { pluginAuthPassword } = await import("@pdslite/plugin-auth-password");
 
   server = await startServer({
     port: PORT,
@@ -59,7 +57,10 @@ describe("createRecord", () => {
         repo: testDid,
         collection: "app.bsky.feed.like",
         rkey: "mylike",
-        record: { $type: "app.bsky.feed.like", subject: { uri: "at://x", cid: "abc" } },
+        record: {
+          $type: "app.bsky.feed.like",
+          subject: { uri: "at://x", cid: "abc" },
+        },
       },
       { auth: accessJwt },
     );

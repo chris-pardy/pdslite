@@ -9,9 +9,7 @@ let server: ServerHandle;
 
 beforeAll(async () => {
   const { startServer } = await import("../src/index.js");
-  const { pluginAuthPassword } = await import(
-    "@pdslite/plugin-auth-password"
-  );
+  const { pluginAuthPassword } = await import("@pdslite/plugin-auth-password");
 
   server = await startServer({
     port: PORT,

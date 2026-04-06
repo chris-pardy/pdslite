@@ -28,7 +28,11 @@ export function createSessionHandler(ctx: AppContext): XRPCHandler {
       });
     } catch (err) {
       if (err instanceof XRPCError) throw err;
-      throw new XRPCError(401, "AuthenticationRequired", "Invalid identifier or password");
+      throw new XRPCError(
+        401,
+        "AuthenticationRequired",
+        "Invalid identifier or password",
+      );
     }
   };
 }

@@ -44,7 +44,8 @@ export function createAccountHandler(ctx: AppContext): XRPCHandler {
       });
     } catch (err) {
       if (err instanceof XRPCError) throw err;
-      const message = err instanceof Error ? err.message : "Account creation failed";
+      const message =
+        err instanceof Error ? err.message : "Account creation failed";
       throw new XRPCError(400, "InvalidRequest", message);
     }
   };

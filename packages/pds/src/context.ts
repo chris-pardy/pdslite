@@ -1,8 +1,5 @@
 import type { WriteFilter, BlobFilter } from "./write-filter/types.js";
-import type {
-  AccountFilter,
-  AuthProvider,
-} from "./plugin/types.js";
+import type { AccountFilter, AuthProvider } from "./plugin/types.js";
 import type { AccountManager } from "./account/types.js";
 import type { RecordStore } from "./record-store/types.js";
 import type { BlobStore } from "./blob-store/types.js";

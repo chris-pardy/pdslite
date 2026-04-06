@@ -18,12 +18,18 @@ export function createServer(ctx: AppContext): Hono {
   app.onError(xrpcErrorHandler);
 
   // Soft auth — populates auth context if token is valid, null otherwise
-  app.use("/xrpc/*", softAuthVerifier(() => ctx.authProvider));
+  app.use(
+    "/xrpc/*",
+    softAuthVerifier(() => ctx.authProvider),
+  );
 
   // Server endpoints
   app.post("/xrpc/com.atproto.server.createAccount", createAccountHandler(ctx));
   app.post("/xrpc/com.atproto.server.createSession", createSessionHandler(ctx));
-  app.get("/xrpc/com.atproto.server.describeServer", describeServerHandler(ctx));
+  app.get(
+    "/xrpc/com.atproto.server.describeServer",
+    describeServerHandler(ctx),
+  );
 
   // Record write endpoints
   app.post("/xrpc/com.atproto.repo.createRecord", createRecord(ctx));

@@ -10,10 +10,7 @@ const PDS_PORT = 13583;
 export const PDS_URL = `http://localhost:${PDS_PORT}`;
 
 /** Build the full URL for an XRPC endpoint. */
-export function xrpcUrl(
-  nsid: string,
-  params?: Record<string, string>,
-): string {
+export function xrpcUrl(nsid: string, params?: Record<string, string>): string {
   const url = new URL(`/xrpc/${nsid}`, PDS_URL);
   if (params) {
     for (const [k, v] of Object.entries(params)) {

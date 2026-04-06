@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "oxlint src/"
   },
   "dependencies": {
     "hono": "^4.7.0",

@@ -45,7 +45,11 @@ export function requireAuth(): MiddlewareHandler {
   return async (c, next) => {
     const auth = c.get("auth") as AuthInfo | null;
     if (!auth) {
-      throw new XRPCError(401, "AuthenticationRequired", "Authentication required");
+      throw new XRPCError(
+        401,
+        "AuthenticationRequired",
+        "Authentication required",
+      );
     }
     await next();
   };

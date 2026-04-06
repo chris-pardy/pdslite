@@ -28,10 +28,7 @@ export function pluginAuthPassword(config?: PasswordAuthConfig): Plugin {
 
   let accountManager: AccountManager;
 
-  async function hashPassword(
-    password: string,
-    salt: string,
-  ): Promise<string> {
+  async function hashPassword(password: string, salt: string): Promise<string> {
     const key = (await scryptAsync(password, salt, 64, {
       N: scryptCost,
       r: 8,

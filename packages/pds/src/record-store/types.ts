@@ -37,9 +37,5 @@ export interface RecordStore {
     rkey: string,
     record: unknown,
   ): Promise<StoredRecord>;
-  deleteRecord(
-    did: string,
-    collection: string,
-    rkey: string,
-  ): Promise<void>;
+  deleteRecord(did: string, collection: string, rkey: string): Promise<void>;
 }

@@ -19,10 +19,9 @@ export interface RunPipelineOpts<TOp, TResult extends FilterDecision> {
   applyTransform?: (op: TOp, result: TResult) => TOp;
 }
 
-export async function runFilterPipeline<
-  TOp,
-  TResult extends FilterDecision,
->(opts: RunPipelineOpts<TOp, TResult>): Promise<TResult> {
+export async function runFilterPipeline<TOp, TResult extends FilterDecision>(
+  opts: RunPipelineOpts<TOp, TResult>,
+): Promise<TResult> {
   const { filters, applyTransform } = opts;
   let op = opts.operation;
   let allowed = false;

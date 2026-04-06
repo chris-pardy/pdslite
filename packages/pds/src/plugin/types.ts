@@ -26,10 +26,7 @@ export interface AuthProvider {
   createAccount(
     opts: CreateAccountOpts,
   ): Promise<{ did: string; accessJwt: string; refreshJwt: string }>;
-  createSession(opts: {
-    identifier: string;
-    password: string;
-  }): Promise<{
+  createSession(opts: { identifier: string; password: string }): Promise<{
     did: string;
     accessJwt: string;
     refreshJwt: string;

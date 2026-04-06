@@ -4,6 +4,7 @@ import { XRPCError } from "../../../../xrpc/types.js";
 import { runWriteFilters } from "../../../../write-filter/index.js";
 import type { WriteOperation } from "../../../../write-filter/types.js";
 import { generateRkey } from "../../../../rkey.js";
+import { verifyRepoOwnership } from "./util.js";
 
 const ACTION_MAP: Record<string, WriteOperation["action"]> = {
   "com.atproto.repo.applyWrites#create": "create",
@@ -15,6 +16,7 @@ export function applyWrites(ctx: AppContext): XRPCHandler {
   return async (c) => {
     const body = await c.req.json();
     const did = body.repo;
+    verifyRepoOwnership(c, did);
     const results: unknown[] = [];
 
     for (const write of body.writes) {

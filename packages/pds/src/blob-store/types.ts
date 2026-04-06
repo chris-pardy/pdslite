@@ -5,14 +5,8 @@ export interface BlobRef {
 }
 
 export interface BlobStore {
-  putBlob(
-    did: string,
-    bytes: Uint8Array,
-    mimeType: string,
-  ): Promise<BlobRef>;
-  getBlob(
-    ref: string,
-  ): Promise<{ bytes: Uint8Array; mimeType: string } | null>;
+  putBlob(did: string, bytes: Uint8Array, mimeType: string): Promise<BlobRef>;
+  getBlob(ref: string): Promise<{ bytes: Uint8Array; mimeType: string } | null>;
 
   /** Track that a record references a blob. */
   addReference(blobRef: string, recordUri: string): Promise<void>;
