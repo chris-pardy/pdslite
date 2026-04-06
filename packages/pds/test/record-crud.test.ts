@@ -262,6 +262,204 @@ describe("applyWrites", () => {
   });
 });
 
+describe("getRecord", () => {
+  it("returns a record that exists", async () => {
+    const createRes = await post(
+      "com.atproto.repo.createRecord",
+      {
+        repo: testDid,
+        collection: "app.bsky.feed.post",
+        rkey: "getme",
+        record: { $type: "app.bsky.feed.post", text: "retrievable" },
+      },
+      { auth: accessJwt },
+    );
+    expect(createRes.status).toBe(200);
+
+    const res = await get("com.atproto.repo.getRecord", {
+      repo: testDid,
+      collection: "app.bsky.feed.post",
+      rkey: "getme",
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.uri).toBe(`at://${testDid}/app.bsky.feed.post/getme`);
+    expect(body.cid).toBeTruthy();
+    expect(body.value).toEqual({
+      $type: "app.bsky.feed.post",
+      text: "retrievable",
+    });
+  });
+
+  it("returns error for nonexistent record", async () => {
+    const res = await get("com.atproto.repo.getRecord", {
+      repo: testDid,
+      collection: "app.bsky.feed.post",
+      rkey: "doesnotexist",
+    });
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.error).toBe("RecordNotFound");
+  });
+
+  it("returns error when missing required params", async () => {
+    const res = await get("com.atproto.repo.getRecord", {
+      repo: testDid,
+    });
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.error).toBe("InvalidRequest");
+  });
+
+  it("reflects updates from putRecord", async () => {
+    await post(
+      "com.atproto.repo.putRecord",
+      {
+        repo: testDid,
+        collection: "app.bsky.actor.profile",
+        rkey: "getcheck",
+        record: { $type: "app.bsky.actor.profile", displayName: "Before" },
+      },
+      { auth: accessJwt },
+    );
+    await post(
+      "com.atproto.repo.putRecord",
+      {
+        repo: testDid,
+        collection: "app.bsky.actor.profile",
+        rkey: "getcheck",
+        record: { $type: "app.bsky.actor.profile", displayName: "After" },
+      },
+      { auth: accessJwt },
+    );
+
+    const res = await get("com.atproto.repo.getRecord", {
+      repo: testDid,
+      collection: "app.bsky.actor.profile",
+      rkey: "getcheck",
+    });
+    const body = await res.json();
+    expect(body.value.displayName).toBe("After");
+  });
+
+  it("returns error after record is deleted", async () => {
+    await post(
+      "com.atproto.repo.createRecord",
+      {
+        repo: testDid,
+        collection: "app.bsky.feed.post",
+        rkey: "delcheck",
+        record: { $type: "app.bsky.feed.post", text: "will be deleted" },
+      },
+      { auth: accessJwt },
+    );
+    await post(
+      "com.atproto.repo.deleteRecord",
+      {
+        repo: testDid,
+        collection: "app.bsky.feed.post",
+        rkey: "delcheck",
+      },
+      { auth: accessJwt },
+    );
+
+    const res = await get("com.atproto.repo.getRecord", {
+      repo: testDid,
+      collection: "app.bsky.feed.post",
+      rkey: "delcheck",
+    });
+    expect(res.ok).toBe(false);
+    expect((await res.json()).error).toBe("RecordNotFound");
+  });
+});
+
+describe("listRecords", () => {
+  it("lists records in a collection", async () => {
+    // Create records in a fresh collection
+    for (let i = 0; i < 3; i++) {
+      await post(
+        "com.atproto.repo.createRecord",
+        {
+          repo: testDid,
+          collection: "app.bsky.feed.repost",
+          rkey: `list-${i}`,
+          record: {
+            $type: "app.bsky.feed.repost",
+            subject: { uri: `at://x/post/${i}`, cid: `cid${i}` },
+          },
+        },
+        { auth: accessJwt },
+      );
+    }
+
+    const res = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+      collection: "app.bsky.feed.repost",
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.records.length).toBeGreaterThanOrEqual(3);
+    expect(body.records[0]).toHaveProperty("uri");
+    expect(body.records[0]).toHaveProperty("cid");
+    expect(body.records[0]).toHaveProperty("value");
+  });
+
+  it("returns empty array for collection with no records", async () => {
+    const res = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+      collection: "com.example.empty.collection",
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.records).toEqual([]);
+  });
+
+  it("respects limit parameter", async () => {
+    const res = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+      collection: "app.bsky.feed.repost",
+      limit: "2",
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.records.length).toBe(2);
+    expect(body.cursor).toBeTruthy();
+  });
+
+  it("supports cursor-based pagination", async () => {
+    const page1 = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+      collection: "app.bsky.feed.repost",
+      limit: "2",
+    });
+    const body1 = await page1.json();
+    expect(body1.cursor).toBeTruthy();
+
+    const page2 = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+      collection: "app.bsky.feed.repost",
+      cursor: body1.cursor,
+      limit: "2",
+    });
+    const body2 = await page2.json();
+    // Page 2 should not overlap with page 1
+    const uris1 = body1.records.map((r: { uri: string }) => r.uri);
+    const uris2 = body2.records.map((r: { uri: string }) => r.uri);
+    for (const uri of uris2) {
+      expect(uris1).not.toContain(uri);
+    }
+  });
+
+  it("returns error when missing required params", async () => {
+    const res = await get("com.atproto.repo.listRecords", {
+      repo: testDid,
+    });
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.error).toBe("InvalidRequest");
+  });
+});
+
 describe("uploadBlob", () => {
   it("succeeds and returns blob ref", async () => {
     const png = new Uint8Array([
@@ -283,5 +481,52 @@ describe("uploadBlob", () => {
     expect(body.blob).toHaveProperty("ref");
     expect(body.blob).toHaveProperty("mimeType", "image/png");
     expect(body.blob).toHaveProperty("size", 8);
+  });
+});
+
+describe("getBlob", () => {
+  it("retrieves an uploaded blob by cid", async () => {
+    const data = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+    const uploadRes = await fetch(
+      `http://localhost:${PORT}/xrpc/com.atproto.repo.uploadBlob`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          Authorization: `Bearer ${accessJwt}`,
+        },
+        body: data,
+      },
+    );
+    expect(uploadRes.status).toBe(200);
+    const { blob } = await uploadRes.json();
+
+    const res = await get("com.atproto.sync.getBlob", {
+      did: testDid,
+      cid: blob.ref,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(bytes).toEqual(data);
+  });
+
+  it("returns error for nonexistent blob", async () => {
+    const res = await get("com.atproto.sync.getBlob", {
+      did: testDid,
+      cid: "nonexistent",
+    });
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.error).toBe("BlobNotFound");
+  });
+
+  it("returns error when missing required params", async () => {
+    const res = await get("com.atproto.sync.getBlob", {
+      did: testDid,
+    });
+    expect(res.ok).toBe(false);
+    const body = await res.json();
+    expect(body.error).toBe("InvalidRequest");
   });
 });

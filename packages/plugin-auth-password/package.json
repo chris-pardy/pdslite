@@ -6,7 +6,6 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
-    "test": "vitest run",
     "lint": "oxlint src/"
   },
   "dependencies": {
