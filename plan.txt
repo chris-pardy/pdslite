@@ -1,0 +1,328 @@
+PDS Lite - Implementation Plan
+==============================
+
+Technology Stack
+----------------
+- TypeScript on Node.js >= 24 use nvm
+- pnpm workspaces + turborepo for monorepo management
+- Hono for HTTP (TypeScript-first, async-native, lightweight)
+- tsdown (rolldown-based) for builds
+- vitest for tests
+- pino for structured logging
+- Pluggable storage: in-memory (default/test), SQLite, Postgres
+
+@atproto Packages to Reuse
+---------------------------
+- @atproto/repo      - MST, signed commits, CAR, CBOR, block storage
+- @atproto/crypto    - Signing, verification, key encoding
+- @atproto/identity  - DID/handle resolution
+- @atproto/syntax    - NSID, AT-URI, handle parsing
+- @atproto/lexicon   - Schema validation
+- @atproto/common    - TID generation, utilities
+
+NOT reusing @atproto/xrpc-server (Express-coupled). Build a thin XRPC
+dispatch layer on Hono instead.
+
+Monorepo Structure
+------------------
+pdslite/
+  package.json
+  pnpm-workspace.yaml
+  turbo.json
+  tsconfig.base.json
+
+  packages/
+    pds/                        Core PDS server
+      src/
+        index.ts                Entry point
+        config.ts               Env + YAML config (zod validated)
+        context.ts              AppContext dependency container
+        server.ts               Hono app setup
+        xrpc/
+          dispatch.ts           /xrpc/:nsid routing + lexicon validation
+          middleware.ts         XRPC encoding, error formatting
+          types.ts              Handler types, auth context
+        auth/
+          types.ts              AuthProvider interface
+          verifier.ts           Auth verification (delegates to provider)
+        account/
+          manager.ts            Account CRUD
+          types.ts
+        plugin/
+          types.ts              Plugin interface (routes, filters, lifecycle)
+          loader.ts             Plugin discovery and initialization
+        repo/
+          actor-store.ts        Per-actor repo store manager
+          transactor.ts         Filters -> repo mutation -> sequencer
+          prepare.ts            Record prep and validation
+          types.ts
+        blob/
+          store.ts              BlobStore interface
+          types.ts
+        sequencer/
+          sequencer.ts          Event log
+          outbox.ts             WebSocket event delivery
+          events.ts             Event type formatting
+        identity/
+          did.ts                did:plc creation via PLC directory
+          handle.ts             DNS TXT + well-known resolution
+          plc-client.ts         PLC directory HTTP client
+        storage/
+          types.ts              StorageBackend interface
+          memory.ts             In-memory implementation
+        write-filter/
+          index.ts              Pipeline executor
+          types.ts              WriteFilter, FilterResult, WriteOperation
+          config.ts             Filter chain config loader
+        api/
+          com/atproto/
+            server/             createAccount, createSession, etc.
+            repo/               createRecord, getRecord, etc.
+            sync/               getRepo, subscribeRepos, etc.
+            identity/           resolveHandle
+        well-known/
+          routes.ts             /.well-known/atproto-did
+        middleware/
+          rate-limit.ts
+          logging.ts
+          error-handler.ts
+      test/
+        setup.ts                Ephemeral PDS test helper
+        deny-all.test.ts        Default deny baseline (PASSES)
+        account.test.ts
+        repo.test.ts
+        blob.test.ts
+        sync.test.ts
+        migration.test.ts       Most important tests
+
+    plugin-allow-all/           Dev: allows everything (write filter)
+    plugin-collection-allow/    Allow specific collections (write filter)
+    plugin-record-schema/       Lexicon validation + field stripping (write filter)
+    plugin-blob-type/           MIME type + size filtering (write filter)
+    plugin-profanity-filter/    Text content transformation (write filter)
+    plugin-rate-limit/          Per-account rate limiting (write filter)
+    plugin-auth-password/       Username + password auth (adds /login route)
+    plugin-auth-oidc/           OIDC auth (Auth0, Clerk -- redirect model)
+    storage-sqlite/             SQLite storage backend
+    storage-postgres/           Postgres storage backend
+
+Plugin System
+-------------
+
+Plugins are the primary extension point. A plugin can provide any
+combination of: write filters, blob filters, auth, and HTTP routes.
+
+  interface Plugin {
+    id: string;
+    name: string;
+
+    /** Called once at startup with plugin config. */
+    initialize?(config: unknown, ctx: PluginContext): Promise<void>;
+
+    /** Register HTTP routes on the PDS. */
+    routes?(app: Hono): void;
+
+    /** Provide an auth implementation. */
+    auth?: AuthProvider;
+
+    /** Write filter (records). */
+    filter?(op: WriteOperation): Promise<FilterResult>;
+
+    /** Blob filter (uploads). */
+    blobFilter?(op: BlobUploadOperation): Promise<FilterResult>;
+
+    /** Cleanup on shutdown. */
+    destroy?(): Promise<void>;
+  }
+
+  PluginContext gives plugins access to PDS internals they may need
+  (account manager, storage, config). This is how an auth plugin
+  creates accounts and manages DIDs.
+
+Auth provider interface (supplied by auth plugins):
+
+  interface AuthProvider {
+    /** Handle account creation. */
+    createAccount(opts: CreateAccountOpts): Promise<{ did: string }>;
+    /** Validate a token/credential, return the authenticated DID. */
+    verifyToken(token: string): Promise<{ did: string }>;
+  }
+
+  The PDS discovers auth by loading whichever plugin provides it.
+  Exactly one plugin should provide auth.
+
+  Recommended: plugin-auth-oidc (redirect model)
+    - PDS acts as OAuth AS, delegates login to external IdP
+    - .well-known/oauth-authorization-server on PDS redirects to IdP
+    - IdP authenticates user, redirects back to PDS
+    - PDS mints AT Protocol tokens
+    - No login UI on the PDS itself
+
+  Alternative: plugin-auth-password
+    - Registers /login route on PDS
+    - argon2 password hashing + JWT tokens
+    - Simple deployments, no external IdP needed
+
+Write filter interface:
+
+  interface WriteOperation {
+    requester: RequesterInfo;
+    action: 'create' | 'update' | 'delete';
+    collection: string;
+    rkey: string;
+    record?: unknown;
+    blobs?: BlobRef[];
+  }
+
+  interface RequesterInfo {
+    did: string;
+    serviceDid?: string;         // If proxied from a trusted service
+    isTrustedService: boolean;
+  }
+
+  type FilterResult =
+    | { decision: 'allow'; record?: unknown }  // allow, optionally transform
+    | { decision: 'reject'; reason: string }   // reject
+    | { decision: 'pass'; record?: unknown };  // no opinion, optionally transform
+
+Write filter pipeline rules:
+  1. Any "reject" short-circuits -- write is denied immediately
+  2. "allow" or "pass" with transformed record feeds into subsequent filters
+  3. After all filters: at least one "allow" required, otherwise rejected (default-deny)
+
+Blob filters follow the same pattern with blob-specific context
+(bytes, mimeType, size, requester). Trusted services can bypass
+blob restrictions for content from known-safe sources.
+
+Pluggable Storage
+-----------------
+
+  interface StorageBackend {
+    accounts: AccountStore;
+    repos: RepoStoreFactory;
+    blobs: BlobStore;
+    sequencer: SequencerStore;
+    initialize(): Promise<void>;
+    close(): Promise<void>;
+  }
+
+- In-memory: ships with core, used for tests and development
+- SQLite: first real backend, good for single-server deployments
+- Postgres: for operators with existing DB infrastructure
+
+Build Steps
+-----------
+
+STEP 1: Skeleton + deny-all test suite
+
+  Build:
+  - Root monorepo scaffold (package.json, pnpm-workspace.yaml, turbo.json,
+    tsconfig.base.json)
+  - packages/pds: Config system, Hono server, XRPC dispatch, write filter
+    pipeline (no filters = deny all), in-memory storage backend, all API
+    endpoint stubs returning proper XRPC errors
+  - deny-all.test.ts: PASSING test suite validating every write/blob
+    operation is correctly rejected. This is the baseline.
+  - migration.test.ts: Account migration test stubs (most important tests)
+
+  Milestone: pnpm test passes. Server denies everything correctly.
+
+STEP 2: Plugin system + account creation
+
+  Build:
+  - Plugin loader: discovers and initializes plugins, registers routes,
+    collects filters, wires up auth provider
+  - plugin-auth-password package: simplest auth plugin
+    - Registers /login route on the PDS
+    - argon2 password hashing + JWT tokens
+    - Implements AuthProvider (createAccount, verifyToken)
+  - Account manager (DID provisioning, account lifecycle)
+  - did:plc creation via PLC directory client
+  - Handle resolution (DNS TXT + well-known)
+  - XRPC endpoints: createAccount, createSession, refreshSession,
+    deleteSession, getSession, describeServer
+  - These endpoints delegate to whichever auth plugin is loaded
+
+  Milestone: Account tests pass with plugin-auth-password.
+  Deny-all tests still pass for record/blob ops.
+
+STEP 3: Allow-all plugin + record/blob CRUD
+
+  Build:
+  - plugin-allow-all package (trivial filter that allows everything)
+  - Actor store with per-actor repo management
+  - Repo transactor integrating filter pipeline
+  - Record CRUD endpoints: createRecord, getRecord, listRecords,
+    putRecord, deleteRecord, applyWrites
+  - Blob store (disk) + uploadBlob, getBlob endpoints
+  - Wire allow-all plugin into test PDS
+
+  Milestone: Record and blob tests pass with allow-all. Deny-all tests
+  pass without it.
+
+STEP 4: Sync + migration
+
+  Build:
+  - Sequencer (event log for firehose)
+  - getRepo (CAR export), listRepos, getLatestCommit
+  - subscribeRepos WebSocket with cursor support
+  - getBlob, listBlobs
+  - Account migration via CAR export/import, importRepo endpoint
+  - Migration tests are the priority
+
+  Milestone: Full PDS operational. Migration tests pass.
+
+STEP 5: Default plugins
+
+  Each as its own package with unit tests:
+
+  1. plugin-collection-allow
+     - Collection allowlist with wildcard support (com.myapp.*)
+     - Trusted service bypass
+     - Optional deny-delete for specific collections
+
+  2. plugin-record-schema
+     - Validate records against lexicon schemas
+     - Strip undeclared fields (transform)
+     - Load custom lexicon definitions
+
+  3. plugin-blob-type
+     - MIME type allowlist
+     - Max size enforcement
+     - Trusted service bypass for known-safe sources
+
+  4. plugin-profanity-filter
+     - Demonstrates arbitrary text transformation
+     - Scans text fields and replaces/strips profanity
+     - Returns transformed record
+
+  5. plugin-rate-limit
+     - Per-account sliding window rate limiting
+     - Configurable window and max writes
+
+  Milestone: All plugins unit-tested. Can compose any combination.
+
+STEP 6: Storage backends + production hardening
+
+  Build:
+  - storage-sqlite package
+  - storage-postgres package
+  - Integration tests run against each backend
+  - OAuth support via @atproto/oauth-provider
+  - Dockerfile + docker-compose
+  - Documentation
+
+  Milestone: Production-ready deployment options.
+
+Test Philosophy
+---------------
+- deny-all.test.ts PASSES with zero filters configured. Every write/blob
+  operation is correctly rejected. This is the baseline.
+- When a filter is added, specific deny-all tests start failing. That
+  means the allow rule is working correctly.
+- Migration tests are the most important integration tests. The PDS is
+  a temporary home -- accounts must be able to leave cleanly.
+- Plugin unit tests use the WriteFilter interface directly, no server needed.
+- Integration tests use ephemeral PDS instances with in-memory storage.
+- Build verification: tsdown produces working bundle, server starts from
+  built output.
