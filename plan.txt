@@ -95,12 +95,13 @@ pdslite/
         sync.test.ts
         migration.test.ts       Most important tests
 
-    plugin-allow-all/           Dev: allows everything (write filter)
+    plugin-allow-all/           Dev: allows writes, blobs, and signups
     plugin-collection-allow/    Allow specific collections (write filter)
     plugin-record-schema/       Lexicon validation + field stripping (write filter)
     plugin-blob-type/           MIME type + size filtering (write filter)
     plugin-profanity-filter/    Text content transformation (write filter)
     plugin-rate-limit/          Per-account rate limiting (write filter)
+    plugin-invite-code/         Invite code signup gating (account filter)
     plugin-auth-password/       Username + password auth (adds /login route)
     plugin-auth-oidc/           OIDC auth (Auth0, Clerk -- redirect model)
     storage-sqlite/             SQLite storage backend
@@ -130,6 +131,9 @@ combination of: write filters, blob filters, auth, and HTTP routes.
 
     /** Blob filter (uploads). */
     blobFilter?(op: BlobUploadOperation): Promise<FilterResult>;
+
+    /** Account filter (signup/deletion policy). */
+    accountFilter?(op: AccountOperation): Promise<AccountFilterResult>;
 
     /** Cleanup on shutdown. */
     destroy?(): Promise<void>;
@@ -193,6 +197,38 @@ Write filter pipeline rules:
 Blob filters follow the same pattern with blob-specific context
 (bytes, mimeType, size, requester). Trusted services can bypass
 blob restrictions for content from known-safe sources.
+
+Account filter interface:
+
+  Account filters control WHO can create accounts on the PDS. They are
+  separate from auth providers (which handle credential mechanics).
+  This separation lets you compose signup policy independently of
+  how authentication works.
+
+  interface AccountOperation {
+    action: 'create' | 'delete';
+    handle: string;
+    email?: string;
+    inviteCode?: string;
+    metadata?: Record<string, unknown>;  // Opaque app-specific fields
+    clientId?: string;                   // Which app/client is signing up
+    ip?: string;                         // Request IP for rate limiting
+  }
+
+  type AccountFilterResult =
+    | { decision: 'allow' }
+    | { decision: 'reject'; reason: string }
+    | { decision: 'pass' };
+
+  Same pipeline rules as write filters: any reject short-circuits,
+  at least one allow required. No account filters = no signups.
+
+  Example account filter plugins:
+    - plugin-invite-code:    Validates inviteCode, allows if valid
+    - plugin-app-restrict:   Allows signups only from known clientIds
+    - plugin-email-domain:   Allows signups only from specific email domains
+    - plugin-signup-rate:    Per-IP rate limiting on account creation
+    - plugin-allow-all:      Allows both writes AND signups (dev mode)
 
 Pluggable Storage
 -----------------

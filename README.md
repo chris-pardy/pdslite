@@ -54,9 +54,11 @@ PDS Lite is built for app developers, not infrastructure operators:
 
 ## Architecture
 
-### Write Filter Pipeline
+### Filter Pipelines
 
-Every write operation passes through a configurable filter chain before touching the repository:
+PDS Lite uses the same default-deny filter model for both **writes** and **account creation**. Every operation passes through a configurable filter chain. Any filter can reject (short-circuit), allow, or pass (no opinion). At least one "allow" is required — otherwise the operation is denied.
+
+#### Write Filters
 
 ```
 Write Request
@@ -68,14 +70,27 @@ Write Request
   → Repository write
 ```
 
-Filters can:
-- **Allow** a write, optionally transforming the record (strip undeclared fields, sanitize text)
-- **Reject** a write with a reason
-- **Pass** (no opinion -- defer to other filters)
+Write filters can also **transform** records — stripping undeclared fields, sanitizing text, etc. They receive information about **who** is making the request, enabling trust decisions like allowing blob uploads only from your own backend.
 
-If no filter allows a write, it's rejected. This is the default-deny model.
+#### Account Filters
 
-Filters also receive information about **who** is making the request. This enables trusting specific services -- for example, allowing blob uploads only from your own backend, not from arbitrary clients. Content from known-safe sources doesn't need the same scrutiny as user-generated uploads.
+```
+Create Account Request
+  → Account Filter 1: decision (allow / reject / pass)
+  → Account Filter 2: decision (allow / reject / pass)
+  → Account Filter N: ...
+  → At least one "allow" required, any "reject" stops immediately
+  → Auth provider creates account
+```
+
+Account filters control **who can sign up**, independent of how authentication works. This lets you compose signup policy from small, focused plugins:
+
+- **Invite codes** — require a valid invite code to create an account
+- **App restriction** — only allow signups from your app's client ID
+- **Email domain** — only allow signups from specific email domains
+- **Rate limiting** — per-IP signup rate limits
+
+The auth plugin (password, OIDC) handles credential mechanics. Account filters handle signup policy. They compose independently.
 
 ### Pluggable Storage
 
@@ -94,12 +109,13 @@ Ship with in-memory for tests. Add SQLite or Postgres for production. The interf
 ```
 packages/
   pds/                       # Core server
-  plugin-allow-all/          # Development: allows everything
+  plugin-allow-all/          # Development: allows writes, blobs, and signups
   plugin-collection-allow/   # Allow specific record collections
   plugin-record-schema/      # Lexicon validation + field stripping
   plugin-blob-type/          # MIME type + size filtering
   plugin-profanity-filter/   # Text content transformation
   plugin-rate-limit/         # Per-account rate limiting
+  plugin-invite-code/        # Invite code signup gating
   storage-sqlite/            # SQLite storage backend
   storage-postgres/          # Postgres storage backend
 ```
